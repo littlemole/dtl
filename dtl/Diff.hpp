@@ -38,6 +38,8 @@
 #ifndef DTL_DIFF_H
 #define DTL_DIFF_H
 
+#include <regex>
+
 namespace dtl {
     
     /**
