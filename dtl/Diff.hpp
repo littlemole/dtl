@@ -528,6 +528,87 @@ namespace dtl {
             return ret;
         }
         
+               /**
+         * compose unichunked diff from stream
+         */
+        template <typename stream>
+        void composeUnichunkFromStream (stream& st) {
+
+			std::regex rgx("@@ -([0-9]+),([0-9]+) \\+([0-9]+),([0-9]+) @@.*");
+			std::cmatch m;
+
+			uniHunk<sesElem> result;
+			result.inc_dec_count = 0;
+			result.a = result.b = result.c = result.d = 0;
+
+			elem line;
+			while(!st.eof()) {
+
+				char c = st.peek();
+				if ( c == '@' ) {
+					getline(st, line);
+					// extract unihunk information
+					if ( std::regex_match( line.c_str(), m, rgx) && m.size() == 5 ) {
+						// if there already was a unihunk, store it and prepare a new one
+						if ( result.a != 0 && result.b != 0 && result.c != 0 && result.d != 0 ) {
+							this->uniHunks.push_back(result);
+							result = uniHunk<sesElem>();
+							result.a = result.b = result.c = result.d = 0;
+							result.inc_dec_count = 0;
+						}
+
+						// store unihunk information
+						result.a = atoi(m[1].str().c_str());
+						result.b = atoi(m[2].str().c_str());
+						result.c = atoi(m[3].str().c_str());
+						result.d = atoi(m[4].str().c_str());
+					}
+				}
+				else if ( c == '-' ) {
+					getline(st, line);
+					elem e(line.begin() + 1, line.end());
+					eleminfo ei;
+					ei.type = SES_DELETE;
+					result.change.push_back( std::make_pair( e, ei ));
+					result.inc_dec_count++;
+				}
+				else if ( c == '+' ) {
+					getline(st, line);
+					elem e(line.begin() + 1, line.end());
+					eleminfo ei;
+					ei.type = SES_ADD;
+					result.change.push_back( std::make_pair( e, ei ));
+					result.inc_dec_count++;
+                } 
+				else if ( c == ' ' ) {
+					getline(st, line);
+					elem e(line.begin() + 1, line.end());
+					eleminfo ei;
+					ei.type = SES_COMMON;
+					if (  result.change.empty() ) {
+						result.common[0].push_back(std::make_pair( e, ei ));
+					}
+					else {				
+						result.change.push_back( std::make_pair( e, ei ));
+					}
+                }
+				else {
+					break;
+				}
+			} // end while
+
+			if ( result.a != 0 && result.b != 0 && result.c != 0 && result.d != 0 ) {
+
+				if(result.change.back().second.type == SES_COMMON ) {
+					sesElem r = result.change.back();
+					result.change.pop_back();
+					result.common[1].push_back(r);
+				}
+				this->uniHunks.push_back(result);
+				result.inc_dec_count = 0;
+			}
+		}
+        
     private :
         /**
          * initialize
